@@ -15,7 +15,17 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include "comandos.h"
+
+int sd_control_global;
+
+void manejador(int sig)
+{
+    close(sd_control_global);
+    printf("\n\n\t.:Servidor cerrado:.\n\n");
+    exit(0);
+}
 
 void checlCLI(int argc)
 {
@@ -138,6 +148,7 @@ void openCLI(int sd_control)
 
 int main(int argc, char **argv)
 {
+    signal(SIGINT, manejador);
     checlCLI(argc);
     char *port = *(argv+1);
     checkPORT(atoi(*(argv+1)));
