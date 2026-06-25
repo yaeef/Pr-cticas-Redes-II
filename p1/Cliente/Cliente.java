@@ -296,6 +296,16 @@ public class Cliente {
                                 Thread.sleep(80);
                             } catch (InterruptedException e) {}
 
+                            // Detectamos si es carpeta porque no tiene extension (punto)
+                            boolean esCarpeta = !argumento.contains(".");
+                            String nombreArchivoLocal = esCarpeta
+                                ? argumento + ".zip"
+                                : argumento;
+                            File archivoLocal = new File(
+                                dirLocalActual,
+                                nombreArchivoLocal
+                            );
+
                             try (
                                 Socket socketDatos = new Socket(
                                     HOST_SERVIDOR,
@@ -303,12 +313,7 @@ public class Cliente {
                                 );
                                 InputStream is = socketDatos.getInputStream();
                                 FileOutputStream fos = new FileOutputStream(
-                                    new File(
-                                        dirLocalActual,
-                                        argumento.contains(".")
-                                            ? argumento
-                                            : argumento + ".zip"
-                                    )
+                                    archivoLocal
                                 )
                             ) {
                                 byte[] buffer = new byte[4096];
@@ -334,49 +339,113 @@ public class Cliente {
                                         " bytes)."
                                 );
                             }
-                        } else System.out.println(resDown);
+
+                            // Si era una carpeta, la descomprimimos aqui mismo
+                            if (esCarpeta) {
+                                System.out.println(
+                                    "[Local]: Extrayendo el contenido de la carpeta..."
+                                );
+                                try {
+                                    descomprimirZip(
+                                        archivoLocal.getAbsolutePath(),
+                                        dirLocalActual
+                                    );
+                                    archivoLocal.delete(); // Borramos el archivo .zip temporal
+                                    System.out.println(
+                                        "[Local]: Carpeta restaurada con éxito."
+                                    );
+                                } catch (IOException e) {
+                                    System.out.println(
+                                        "[Local Error]: Falló al descomprimir: " +
+                                            e.getMessage()
+                                    );
+                                }
+                            }
+                        } else {
+                            System.out.println(resDown);
+                        }
                         break;
-                    case "put":
+                    case "put": {
                         if (argumento.isEmpty()) {
-                            System.out.println("Uso: put <archivo>");
+                            System.out.println("Uso: put <archivo_o_carpeta>");
                             break;
                         }
                         File fileLocal = new File(dirLocalActual, argumento);
-                        if (!fileLocal.exists() || fileLocal.isDirectory()) {
+                        if (!fileLocal.exists()) {
                             System.out.println(
-                                "Error: Archivo local no encontrado en la ruta actual."
+                                "Error: El elemento local no existe."
                             );
                             break;
                         }
+
+                        boolean esCarpeta = fileLocal.isDirectory();
+                        File archivoAEnviar = fileLocal;
+
+                        // Si es una carpeta, la comprimimos primero en un zip temporal
+                        if (esCarpeta) {
+                            archivoAEnviar = new File(
+                                dirLocalActual,
+                                argumento + ".zip"
+                            );
+                            try (
+                                java.util.zip.ZipOutputStream zos =
+                                    new java.util.zip.ZipOutputStream(
+                                        new FileOutputStream(archivoAEnviar)
+                                    )
+                            ) {
+                                comprimirCarpetaLocal(
+                                    fileLocal,
+                                    fileLocal.getName(),
+                                    zos
+                                );
+                            } catch (IOException e) {
+                                System.out.println(
+                                    "[Local Error]: Error al comprimir carpeta: " +
+                                        e.getMessage()
+                                );
+                                break;
+                            }
+                        }
+
+                        // Enviamos el comando de subida con el metadato del archivo final
                         out.println(
                             "UPLOAD " +
-                                fileLocal.getName() +
+                                archivoAEnviar.getName() +
                                 " " +
-                                fileLocal.length()
+                                archivoAEnviar.length()
                         );
+
                         if (in.readLine().equals("READY_TO_RECEIVE")) {
                             try {
                                 Thread.sleep(80);
                             } catch (InterruptedException e) {}
+
                             try (
                                 Socket socketDatos = new Socket(
                                     HOST_SERVIDOR,
                                     PORT_DATOS
                                 );
                                 FileInputStream fis = new FileInputStream(
-                                    fileLocal
+                                    archivoAEnviar
                                 );
                                 OutputStream os = socketDatos.getOutputStream()
                             ) {
                                 byte[] buffer = new byte[4096];
                                 int bytesLeidos;
-                                while ((bytesLeidos = fis.read(buffer)) != -1)
+                                while ((bytesLeidos = fis.read(buffer)) != -1) {
                                     os.write(buffer, 0, bytesLeidos);
+                                }
                                 os.flush();
                             }
-                            System.out.println("[Server]: " + in.readLine());
+                            System.out.println("[Remoto]: " + in.readLine());
+                        }
+
+                        // Borramos el archivo .zip temporal local si se creo uno
+                        if (esCarpeta && archivoAEnviar.exists()) {
+                            archivoAEnviar.delete();
                         }
                         break;
+                    }
                     default:
                         System.out.println("Comando inválido.");
                 }
@@ -385,6 +454,63 @@ public class Cliente {
             System.err.println(
                 "Desconexión del canal de control: " + e.getMessage()
             );
+        }
+    }
+
+    private static void descomprimirZip(String rutaZip, String destino)
+        throws IOException {
+        File destDir = new File(destino);
+        if (!destDir.exists()) {
+            destDir.mkdirs();
+        }
+        try (
+            java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                new FileInputStream(rutaZip)
+            )
+        ) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                File file = new File(destDir, entry.getName());
+                if (entry.isDirectory()) {
+                    file.mkdirs();
+                } else {
+                    file.getParentFile().mkdirs();
+                    try (
+                        BufferedOutputStream bos = new BufferedOutputStream(
+                            new FileOutputStream(file)
+                        )
+                    ) {
+                        byte[] buffer = new byte[4096];
+                        int count;
+                        while ((count = zis.read(buffer)) > 0) {
+                            bos.write(buffer, 0, count);
+                        }
+                    }
+                }
+                zis.closeEntry();
+            }
+        }
+    }
+
+    private static void comprimirCarpetaLocal(
+        File archivo,
+        String rutaBase,
+        java.util.zip.ZipOutputStream zos
+    ) throws IOException {
+        if (archivo.isDirectory()) {
+            for (File f : archivo.listFiles()) {
+                comprimirCarpetaLocal(f, rutaBase + "/" + f.getName(), zos);
+            }
+        } else {
+            try (FileInputStream fis = new FileInputStream(archivo)) {
+                zos.putNextEntry(new java.util.zip.ZipEntry(rutaBase));
+                byte[] buffer = new byte[4096];
+                int bytes;
+                while ((bytes = fis.read(buffer)) != -1) {
+                    zos.write(buffer, 0, bytes);
+                }
+                zos.closeEntry();
+            }
         }
     }
 }

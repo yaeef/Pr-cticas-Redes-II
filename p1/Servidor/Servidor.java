@@ -392,8 +392,15 @@ public class Servidor {
                     fos.write(buffer, 0, bytesLeidos);
                     totalRecibido += bytesLeidos;
                 }
-                out.println("OK: Elemento subido.");
             }
+
+            // Si lo que subio el cliente era una carpeta comprimida, la extraemos en el servidor
+            if (nombre.endsWith(".zip")) {
+                descomprimirCarpetaServidor(destino, dirActual);
+                destino.delete(); // Borramos el zip temporal recibido
+            }
+
+            out.println("OK: Elemento subido.");
         } catch (IOException e) {
             out.println("ERROR: Fail");
         }
@@ -415,6 +422,40 @@ public class Servidor {
                 while ((bytes = fis.read(buffer)) != -1)
                     zos.write(buffer, 0, bytes);
                 zos.closeEntry();
+            }
+        }
+    }
+
+    private static void descomprimirCarpetaServidor(
+        File archivoZip,
+        String destinoPath
+    ) throws IOException {
+        File destDir = new File(destinoPath);
+        try (
+            java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                new FileInputStream(archivoZip)
+            )
+        ) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                File file = new File(destDir, entry.getName());
+                if (entry.isDirectory()) {
+                    file.mkdirs();
+                } else {
+                    file.getParentFile().mkdirs();
+                    try (
+                        BufferedOutputStream bos = new BufferedOutputStream(
+                            new FileOutputStream(file)
+                        )
+                    ) {
+                        byte[] buffer = new byte[4096];
+                        int count;
+                        while ((count = zis.read(buffer)) > 0) {
+                            bos.write(buffer, 0, count);
+                        }
+                    }
+                }
+                zis.closeEntry();
             }
         }
     }
