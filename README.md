@@ -21,8 +21,8 @@ El repositorio se organiza por proyectos o prácticas individuales. Cada directo
 
 ```text
 ├── p1/            # Fundamentos de Sockets TCP
-├── p2/            # Pendiente
-├── p3/            # Pendiente
+├── p2/            # Fundamentos de Sockets UDP, control de error y ventana deslizante.
+├── p3/            # Uso de Sockets UDP para la transferencia de archivos mediante hilos y tuberias. 
 ├── p4/            # Formato de petición y respuesta GET; Uso de Web Crawling
 ├── p5/            # Chat multiusuario con socket no bloqueante con Java NIO (TCP)
 ├── reportes/      # Reporte de cada práctica terminada.
