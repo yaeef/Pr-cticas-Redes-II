@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -67,7 +68,12 @@ public class NioChatServer {
                 return;
             }
 
-            String rawMessage = new String(buffer.array(), 0, bytesRead).trim();
+            String rawMessage = new String(
+                buffer.array(),
+                0,
+                bytesRead,
+                StandardCharsets.UTF_8
+            ).trim();
             processProtocol(channel, rawMessage);
         } catch (IOException e) {
             disconnect(channel);
@@ -243,7 +249,9 @@ public class NioChatServer {
         throws IOException {
         Set<SocketChannel> members = rooms.get(roomName);
         if (members == null) return;
-        ByteBuffer buffer = ByteBuffer.wrap((message + "\n").getBytes());
+        ByteBuffer buffer = ByteBuffer.wrap(
+            (message + "\n").getBytes(StandardCharsets.UTF_8)
+        ); //Codificación utf-8
         synchronized (members) {
             for (SocketChannel client : members) {
                 if (client.isOpen()) {
@@ -257,7 +265,7 @@ public class NioChatServer {
     private void sendDirectMessage(SocketChannel client, String msg)
         throws IOException {
         if (client.isOpen()) {
-            client.write(ByteBuffer.wrap(msg.getBytes()));
+            client.write(ByteBuffer.wrap(msg.getBytes(StandardCharsets.UTF_8)));
         }
     }
 

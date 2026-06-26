@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets; //pARA LOS EMOJIS
 import java.util.Iterator;
 import java.util.Scanner;
 
@@ -102,7 +103,12 @@ public class NioChatClient {
             System.out.println("[-] Desconectado del servidor.");
             System.exit(0);
         }
-        String msg = new String(buffer.array(), 0, bytesRead);
+        String msg = new String(
+            buffer.array(),
+            0,
+            bytesRead,
+            java.nio.charset.StandardCharsets.UTF_8
+        ); //Codificación para emojis :)
         System.out.print(msg);
     }
 
@@ -120,10 +126,23 @@ public class NioChatClient {
             .append("<contenido>")
             .append(contenido);
 
-        socketChannel.write(ByteBuffer.wrap(packet.toString().getBytes()));
+        socketChannel.write(
+            ByteBuffer.wrap(
+                packet
+                    .toString()
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)
+            )
+        ); //Codificación UTF-8
     }
 
     public static void main(String[] args) throws IOException {
+        //Forzar stdout a UTF-8
+        System.setOut(
+            new java.io.PrintStream(System.out, true, StandardCharsets.UTF_8)
+        );
+        System.setErr(
+            new java.io.PrintStream(System.err, true, StandardCharsets.UTF_8)
+        );
         new NioChatClient().start();
     }
 }
