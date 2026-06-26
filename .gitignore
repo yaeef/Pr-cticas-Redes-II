@@ -1,3 +1,6 @@
 p1/Cliente/Archivos/*
 p1/Servidor/Archivos/*
 *.class
+*.mp3
+p2/downloads/
+p2/songs/
