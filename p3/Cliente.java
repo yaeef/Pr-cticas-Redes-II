@@ -3,13 +3,6 @@ import java.net.*;
 import java.util.*;
 import javazoom.jl.player.Player;
 
-/**
- * CLIENTE UDP — Go-Back-N con streaming en tiempo real
- *
- * DIFERENCIA GENERAL: Se eliminó el menú completo, la opción de reproducción
- * local, el HashMap de ensamblado y el FileOutputStream. El flujo ahora es
- * lineal: conectar → elegir → descargar+reproducir simultáneamente.
- */
 public class Cliente {
 
     static final String SERVIDOR = "localhost";
@@ -22,7 +15,7 @@ public class Cliente {
         socket.setSoTimeout(TIMEOUT);
         Scanner sc = new Scanner(System.in);
 
-        // ── 1. Pedir catálogo ─────────────────────────────────────────────────
+        //1-> Fase de catalogo
         Paquete req = new Paquete(Paquete.CATALOGO, 0, 0, new byte[0]);
         enviar(socket, req, addr, PUERTO);
 
@@ -37,7 +30,7 @@ public class Cliente {
             System.out.println(i + ". " + canciones[i]);
         }
 
-        // ── 2. El usuario elige ───────────────────────────────────────────────
+        //Elige la canción
         System.out.print("\nNúmero de canción a reproducir: ");
         int eleccion = Integer.parseInt(sc.nextLine().trim());
 
@@ -47,32 +40,23 @@ public class Cliente {
             return;
         }
 
-        // ── 3. Pedir la canción al servidor ───────────────────────────────────
+        //Envia paquete de pedir
         Paquete pedir = new Paquete(Paquete.PEDIR, eleccion, 0, new byte[0]);
         enviar(socket, pedir, addr, PUERTO);
         System.out.println(
             "Descargando y reproduciendo '" + canciones[eleccion] + "'..."
         );
 
-        // ── 4. Crear el pipe ──────────────────────────────────────────────────
-        // DIFERENCIA: reemplaza al HashMap<Integer, byte[]>.
-        // El pipe conecta el hilo de descarga con el hilo de reproducción.
+        //2-> Fase de PIPE | Se conecta el hilo de reproducción con el hilo de descarga
         PipedOutputStream pipOut = new PipedOutputStream();
         PipedInputStream pipIn = new PipedInputStream(pipOut);
 
-        // ── 5. Lanzar hilo de reproducción ────────────────────────────────────
-        // DIFERENCIA: antes la reproducción era llamada al final tras ensamblar.
-        // Ahora se lanza antes del bucle de descarga para que ambos corran en paralelo.
-        // El hilo se bloquea automáticamente cuando el pipe está vacío y reanuda
-        // en cuanto el hilo de descarga escribe más datos.
-        Thread hiloReproduccion = new Thread(() -> reproducir(pipIn));
+        Thread hiloReproduccion = new Thread(() -> reproducir(pipIn)); //Hilo de Reproducción iniciato, antes rep ocurria al final
         hiloReproduccion.start();
 
-        // ── 6. Bucle de descarga GBN ──────────────────────────────────────────
+        //3-> Fase de descarga, aqui ya no hay un hashmap para guardar los fragmentos, se envian al pipe
         int esperado = 0;
 
-        // DIFERENCIA: se eliminó el HashMap. Ya no se acumula nada,
-        // cada fragmento se escribe al pipe inmediatamente al llegar en orden.
         while (true) {
             try {
                 byte[] rbuf = new byte[65535];
@@ -93,9 +77,7 @@ public class Cliente {
                     );
 
                     if (pkt.numSec == esperado) {
-                        // DIFERENCIA: antes era recibidos.put(pkt.numSec, pkt.datos)
-                        // Ahora se escribe directo al pipe para que JLayer
-                        // decodifique en tiempo real sin esperar al final.
+                        //Si es el paquete esperado entonces escribe en el pipe para que el hilo de reproducción consuma
                         pipOut.write(pkt.datos);
 
                         Paquete ack = new Paquete(
@@ -115,12 +97,7 @@ public class Cliente {
                 break;
             }
         }
-
-        // ── 7. Cerrar el pipe y esperar que termine la reproducción ───────────
-        // DIFERENCIA: antes aquí estaba todo el bloque de ensamblado con
-        // FileOutputStream y el bucle for(i=0..total). Ahora son dos líneas.
-        // Cerrar el pipe le indica a JLayer que no hay más datos,
-        // lo que hace que el hilo de reproducción termine limpiamente.
+        //Se cierra el pipe, ya no hay paquetes para consumir, aqui ya no rearma la canción como antes
         pipOut.close();
         hiloReproduccion.join(); // esperar a que JLayer termine de decodificar
 
@@ -128,10 +105,8 @@ public class Cliente {
         System.out.println("Reproducción finalizada.");
     }
 
-    // DIFERENCIA: antes recibía un File y abría un FileInputStream internamente.
-    // Ahora recibe directamente un InputStream, que puede ser cualquier fuente,
-    // en este caso el extremo de lectura del pipe.
     static void reproducir(InputStream stream) {
+        //Ahora recibe lo que sale del pipe
         try {
             Player player = new Player(stream);
             player.play();

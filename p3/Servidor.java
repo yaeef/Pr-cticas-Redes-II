@@ -3,21 +3,12 @@ import java.net.*;
 import java.nio.file.*;
 import java.util.*;
 
-/**
- * SERVIDOR UDP — Go-Back-N
- *
- * 1. Espera un paquete CATALOGO del cliente y responde con la lista de mp3.
- * 2. Espera un paquete PEDIR(numCancion) y envía el archivo en fragmentos.
- * 3. La ventana deslizante Go-Back-N controla el flujo:
- *    - Envía hasta VENTANA paquetes sin recibir ACK.
- *    - Si hay timeout o NAK, retrocede al inicio de la ventana y reenvía todo.
- */
 public class Servidor {
 
-    static final int PUERTO   = 9876;
-    static final int VENTANA  = 4;         // tamaño de ventana GBN
-    static final int TIMEOUT  = 1000;      // ms
-    static final int CHUNK    = 1024;      // bytes por paquete
+    static final int PUERTO = 9876;
+    static final int VENTANA = 4; // tamaño de ventana GBN
+    static final int TIMEOUT = 1000; // ms
+    static final int CHUNK = 1024; // bytes por paquete
     static final String CARPETA = "songs/";
 
     public static void main(String[] args) throws Exception {
@@ -27,7 +18,7 @@ public class Servidor {
         List<String> canciones = cargarCanciones();
         System.out.println("Canciones disponibles: " + canciones);
 
-        byte[] buf = new byte[65535];
+        byte[] buf = new byte[65535]; //Buffer para UDP
 
         while (true) {
             DatagramPacket dp = new DatagramPacket(buf, buf.length);
@@ -35,16 +26,16 @@ public class Servidor {
             Paquete pkt = Paquete.desdBytes(dp.getData(), dp.getLength());
 
             InetAddress cliente = dp.getAddress();
-            int puerto          = dp.getPort();
+            int puerto = dp.getPort();
 
             if (pkt.tipo == Paquete.CATALOGO) {
-                // Enviar lista de canciones como texto
+                //1-> Fase de catalogo | Enviar lista de canciones como texto
                 String lista = String.join("\n", canciones);
                 Paquete resp = new Paquete(Paquete.CATALOGO, 0, 0, lista.getBytes());
                 enviar(socket, resp, cliente, puerto);
                 System.out.println("Catálogo enviado a " + cliente);
-
             } else if (pkt.tipo == Paquete.PEDIR) {
+                //2-> Fase de descarga
                 int idx = pkt.numSec;
                 System.out.println("Solicitud de canción #" + idx + ": " + canciones.get(idx));
                 enviarCancion(socket, CARPETA + canciones.get(idx), cliente, puerto);
@@ -52,11 +43,10 @@ public class Servidor {
         }
     }
 
-    static void enviarCancion(DatagramSocket socket, String ruta,
-                               InetAddress cliente, int puerto) throws Exception {
+    static void enviarCancion(DatagramSocket socket, String ruta, InetAddress cliente, int puerto) throws Exception {
         byte[] archivo = Files.readAllBytes(Path.of(ruta));
 
-        // Dividir en fragmentos
+        //Se crea una lista de fragmentos de la cancion
         List<byte[]> fragmentos = new ArrayList<>();
         for (int i = 0; i < archivo.length; i += CHUNK) {
             int fin = Math.min(i + CHUNK, archivo.length);
@@ -68,8 +58,8 @@ public class Servidor {
 
         socket.setSoTimeout(TIMEOUT);
 
-        int base = 0;   // inicio de la ventana
-        int sig  = 0;   // siguiente paquete a enviar
+        int base = 0; // inicio de la ventana
+        int sig = 0; // siguiente paquete a enviar
 
         while (base < total) {
             // Enviar todos los paquetes en la ventana que faltan enviar
@@ -111,8 +101,7 @@ public class Servidor {
         return archivos == null ? new ArrayList<>() : Arrays.asList(archivos);
     }
 
-    static void enviar(DatagramSocket s, Paquete p,
-                       InetAddress addr, int puerto) throws Exception {
+    static void enviar(DatagramSocket s, Paquete p, InetAddress addr, int puerto) throws Exception {
         byte[] raw = p.aBytes();
         s.send(new DatagramPacket(raw, raw.length, addr, puerto));
     }

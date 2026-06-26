@@ -219,7 +219,7 @@ public class NioChatServer {
 
     private void printServerStatus() {
         System.out.println(
-            "\n======================= LOG DE ESTADO (NIO) ======================="
+            "\n======================= ESTADO SERVER ======================="
         );
         System.out.println(
             "[USUARIOS CONECTADOS (" +
@@ -227,7 +227,7 @@ public class NioChatServer {
                 ")]: " +
                 channelToUser.values()
         );
-        System.out.println("[SALAS ACTIVAS Y METADATOS]:");
+        System.out.println("[INFORMACIÓN DE SALAS ACTIVAS]:");
         for (String room : rooms.keySet()) {
             String owner = roomToCreator.getOrDefault(room, "Sistema");
             int size = rooms.get(room).size();
